@@ -16,36 +16,37 @@ func aboutHandler(w http.ResponseWriter, r *http.Request) {
 	fmt.Fprintln(w, "About Page")
 }
 
-func getPort() string {
-	port := ":8080" // Default port
-	if p := os.Getenv("APP_PORT_NUMBER"); p != "" {
-		port = ":" + p
+func initializeFileHandlers() error {
+	// Disallow downloading of application
+	appName, err := getAppName()
+	if err != nil {
+		fmt.Println("TERMINATING APP. Error getting app name:", err)
+		return err
 	}
-	return port
-}
+	fmt.Println("App name:" + appName)
+	http.HandleFunc("/"+appName, func(w http.ResponseWriter, r *http.Request) {
+		http.Error(w, "Forbidden.", http.StatusForbidden)
+	})
 
-func getStaticFileLocation() (string, error) {
-	if dir := os.Getenv("APP_STATIC_FILES"); dir != "" {
-		return "./" + dir + "/", nil
-	} else {
-		return "", fmt.Errorf("APP_STATIC_FILES environment variable not set")
-	}
+	http.HandleFunc("/"+appName+".env", func(w http.ResponseWriter, r *http.Request) {
+		http.Error(w, "Forbidden.", http.StatusForbidden)
+	})
+
+	http.Handle("/", http.FileServer(http.Dir("./")))
+	return nil
 }
 
 func main() {
 	godotenv.Load("app_config.env")
-
+	fmt.Println(os.Getenv("APP_NAME"))
 	// Handle routing
-	http.HandleFunc("/", homeHandler)
 	http.HandleFunc("/about", aboutHandler)
 
-	// Handle static files
-	staticFileLocation, err := getStaticFileLocation()
+	err := initializeFileHandlers()
 	if err != nil {
-		fmt.Println("Error getting static file location:", err)
+		fmt.Println("Error initializing file handlers:", err)
 		return
 	}
-	http.Handle("/static/", http.StripPrefix("/static/", http.FileServer(http.Dir(staticFileLocation))))
 
 	// Start the server
 	port := getPort()
